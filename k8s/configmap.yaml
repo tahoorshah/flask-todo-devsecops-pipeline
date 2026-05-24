@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flask-todo-config
+  namespace: production
+data:
+  database-url: 'sqlite:////app/data/todos.db'

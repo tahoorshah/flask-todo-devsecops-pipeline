@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-todo
+  namespace: production
+  labels:
+    app: flask-todo
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flask-todo
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: flask-todo
+        version: v1
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: flask-todo
+        image: localhost:5000/flask-todo:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: db-storage
+          mountPath: /app/data
+        # ─── ADDED MOUNT FOR THE TEMP DIRECTORY ───
+        - name: tmp-storage
+          mountPath: /tmp
+        # ──────────────────────────────────────────
+        env:
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: flask-todo-secret
+              key: secret-key
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: flask-todo-config
+              key: database-url
+        resources:
+          requests:
+            memory: '64Mi'
+            cpu: '100m'
+          limits:
+            memory: '256Mi'
+            cpu: '500m'
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: db-storage
+        emptyDir: {}
+      # ─── REGISTERED THE TEMP EPHEMERAL STORAGE ───
+      - name: tmp-storage
+        emptyDir: {}
+      # ─────────────────────────────────────────────
