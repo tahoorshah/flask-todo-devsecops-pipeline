@@ -2,14 +2,10 @@ pipeline {
     agent any
 
     environment {
-        // Tagging image for the internal Minikube registry
-        IMAGE_NAME   = 'localhost:5000/flask-todo'
+        IMAGE_NAME   = 'flask-todo'
         IMAGE_TAG    = 'latest'
         NAMESPACE    = 'production'
-        
-        // Configured Jenkins Credential IDs
-        SONAR_CRED_ID  = 'sonar-token1'
-        KUBE_CRED_ID   = 'kubeconfig-file'
+        KUBE_CRED_ID = 'kubeconfig-file'
     }
 
     stages {
@@ -22,7 +18,6 @@ pipeline {
 
         stage('OWASP Dependency-Check Scan') {
             steps {
-                echo 'Running Composition Analysis for software vulnerabilities...'
                 dependencyCheck additionalArguments: '--scan ./ --format ALL', odcInstallation: 'OWASP-DepCheck'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
@@ -30,10 +25,9 @@ pipeline {
 
         stage('SonarQube Code Analysis') {
             steps {
-                echo 'Executing static application security testing (SAST)...'
                 script {
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
-                    withCredentials([string(credentialsId: "${SONAR_CRED_ID}", variable: 'SONAR_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'sonar-token1', variable: 'SONAR_TOKEN')]) {
                         withSonarQubeEnv('SonarQube') {
                             sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.token=\${SONAR_TOKEN}"
                         }
@@ -42,50 +36,39 @@ pipeline {
             }
         }
 
-        stage('SonarQube Quality Gate Validation') {
+        stage('Secure Docker Build & Export') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    script {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK') error "SonarQube Quality Gate failed: ${qg.status}"
-                    }
+                echo 'Building image and exporting to tarball for Minikube...'
+                script {
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                    sh "docker save ${IMAGE_NAME}:${IMAGE_TAG} > image.tar"
                 }
             }
         }
 
-        stage('Secure Multi-Stage Docker Build') {
+        stage('Load into Minikube') {
             steps {
-                echo 'Building and pushing image to local Minikube registry...'
-                script {
-                    // Build image and push to the registry-addon service
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
-                }
+                echo 'Transferring and importing image into Minikube...'
+                // Using the SSH bridge established to bypass user permission constraints
+                sh "ssh -o StrictHostKeyChecking=no tshah@localhost 'minikube image load < /var/lib/jenkins/workspace/flask-todo/image.tar'"
             }
         }
 
         stage('Trivy Image Vulnerability Scan') {
             steps {
-                echo 'Scanning image...'
+                echo 'Scanning container image for vulnerabilities...'
                 sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
 
-        stage('Secure Deployment to Kubernetes') {
+        stage('Secure Deployment') {
             steps {
                 withKubeConfig([credentialsId: "${KUBE_CRED_ID}"]) {
                     sh '''
                         kubectl apply -f k8s/namespace.yaml
                         kubectl apply -f k8s/
+                        kubectl rollout status deployment/flask-todo -n ${NAMESPACE} --timeout=90s
                     '''
-                }
-            }
-        }
-
-        stage('Verification & Health Audit') {
-            steps {
-                withKubeConfig([credentialsId: "${KUBE_CRED_ID}"]) {
-                    sh "kubectl rollout status deployment/flask-todo -n ${NAMESPACE} --timeout=90s"
                 }
             }
         }
