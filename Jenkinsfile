@@ -29,10 +29,13 @@ pipeline {
         }
 
         stage('SonarQube Code Analysis') {
+            tools {
+                // Dynamically injects the path of the scanner into the pipeline environment
+                sonarScanner 'SonarQubeScanner'
+            }
             steps {
                 echo 'Executing static application security testing (SAST)...'
                 withSonarQubeEnv('SonarQube') {
-                    // Triggers the analysis scan on the codebase
                     sh 'sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=.'
                 }
             }
@@ -42,7 +45,6 @@ pipeline {
             steps {
                 echo 'Enforcing security quality boundaries...'
                 timeout(time: 5, unit: 'MINUTES') {
-                    // This block pauses Jenkins and waits for your SonarQube Webhook to respond
                     script {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
@@ -57,7 +59,6 @@ pipeline {
             steps {
                 echo 'Injecting shell runtime environment into Minikube container engine...'
                 script {
-                    // Forces the host shell commands to run inside Minikube's Docker Engine
                     sh '''
                         eval \$(minikube docker-env)
                         docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
@@ -69,7 +70,6 @@ pipeline {
         stage('Trivy Image Vulnerability Scan') {
             steps {
                 echo 'Scanning container image filesystem for severe vulnerabilities...'
-                // Scans the locally built image and crashes the pipeline if HIGH or CRITICAL issues are discovered
                 sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
@@ -77,7 +77,6 @@ pipeline {
         stage('Secure Deployment to Kubernetes') {
             steps {
                 echo "Deploying application workloads into Kubernetes namespace: ${NAMESPACE}"
-                // Securely binds your cluster configurations to run kubectl commands safely
                 withKubeConfig([credentialsId: "${KUBE_CRED_ID}"]) {
                     sh '''
                         kubectl apply -f k8s/namespace.yaml
