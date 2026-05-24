@@ -40,23 +40,24 @@ pipeline {
 
         stage('Secure Docker Build') {
             steps {
-                echo 'Building image locally...'
+                echo 'Building image...'
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-            }
-        }
-
-        stage('Load into Minikube') {
-            steps {
-                echo 'Injecting image into Minikube cluster via SSH bridge...'
-                sh "ssh -o StrictHostKeyChecking=no tshah@localhost 'MINIKUBE_HOME=/home/tshah/.minikube minikube image load ${IMAGE_NAME}:${IMAGE_TAG}'"
             }
         }
 
         stage('Trivy Image Vulnerability Scan') {
             steps {
-                echo 'Scanning container image for vulnerabilities...'
-                // Changed from --exit-code 1 to allow pipeline to continue while still reporting
-                sh "trivy image --severity CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}"
+                echo 'Scanning container image (Strict Gate)...'
+                // Re-enabled --exit-code 1 to stop the build on CRITICAL vulnerabilities.
+                // This ensures you do not deploy insecure code.
+                sh "trivy image --severity CRITICAL --exit-code 1 ${IMAGE_NAME}:${IMAGE_TAG}"
+            }
+        }
+
+        stage('Load into Minikube') {
+            steps {
+                echo 'Injecting image into Minikube cluster...'
+                sh "ssh -o StrictHostKeyChecking=no tshah@localhost 'MINIKUBE_HOME=/home/tshah/.minikube minikube image load ${IMAGE_NAME}:${IMAGE_TAG}'"
             }
         }
 
