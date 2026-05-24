@@ -6,7 +6,6 @@ pipeline {
         IMAGE_TAG    = 'latest'
         NAMESPACE    = 'production'
         KUBE_CRED_ID = 'kubeconfig-file'
-        // Define credentials IDs
         SONAR_TOKEN_ID = 'sonar-token1'
         OSS_INDEX_TOKEN_ID = 'sonatype-oss-token'
     }
@@ -21,10 +20,15 @@ pipeline {
 
         stage('Run Unit Tests & Coverage') {
             steps {
-                echo 'Generating coverage reports...'
-                // Ensure pytest-cov is installed in your requirements.txt
+                echo 'Self-healing environment and generating coverage...'
                 sh '''
-                    /venv/bin/pytest --cov=app --cov-report=xml
+                    # Ensure venv is created in the current workspace
+                    python3 -m venv venv
+                    ./venv/bin/pip install --upgrade pip
+                    ./venv/bin/pip install -r requirements.txt pytest pytest-cov
+                    
+                    # Run tests relative to workspace
+                    ./venv/bin/pytest --cov=app --cov-report=xml
                 '''
             }
         }
@@ -32,7 +36,6 @@ pipeline {
         stage('OWASP Dependency-Check Scan') {
             steps {
                 echo 'Running Composition Analysis...'
-                // Using credentials for Sonatype OSS Index to eliminate warnings
                 withCredentials([string(credentialsId: "${OSS_INDEX_TOKEN_ID}", variable: 'OSS_TOKEN')]) {
                     dependencyCheck additionalArguments: "--scan ./ --format ALL --ossindexPassword ${OSS_TOKEN}", odcInstallation: 'OWASP-DepCheck'
                 }
