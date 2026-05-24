@@ -34,9 +34,11 @@ pipeline {
                 script {
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                     
-                    withSonarQubeEnv('SonarQube') {
-                        // Using single quotes prevents Groovy from parsing the shell environment variable prematurely
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=. -Dsonar.token=\${SONAR_TOKEN}"
+                    // Explicitly pull the secret from Jenkins credentials store to ensure it is never blank
+                    withCredentials([string(credentialsId: "${SONAR_CRED_ID}", variable: 'MY_SONAR_TOKEN')]) {
+                        withSonarQubeEnv('SonarQube') {
+                            sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=. -Dsonar.token=\${MY_SONAR_TOKEN}"
+                        }
                     }
                 }
             }
