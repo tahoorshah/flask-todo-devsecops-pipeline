@@ -48,8 +48,9 @@ pipeline {
         stage('Load into Minikube') {
             steps {
                 echo 'Injecting image into Minikube cluster via SSH bridge...'
-                // This command bypasses user-isolation by running as 'tshah' via SSH
-                sh "ssh -o StrictHostKeyChecking=no tshah@localhost 'minikube image load ${IMAGE_NAME}:${IMAGE_TAG}'"
+                // Explicitly setting MINIKUBE_HOME ensures the binary uses the 
+                // correctly-owned cache directory for tshah
+                sh "ssh -o StrictHostKeyChecking=no tshah@localhost 'MINIKUBE_HOME=/home/tshah/.minikube minikube image load ${IMAGE_NAME}:${IMAGE_TAG}'"
             }
         }
 
