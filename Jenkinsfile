@@ -36,7 +36,6 @@ pipeline {
                     
                     withCredentials([string(credentialsId: "${SONAR_CRED_ID}", variable: 'SONAR_TOKEN')]) {
                         withSonarQubeEnv('SonarQube') {
-                            // Clean command: reads host from system configuration and indexing from sonar-project.properties
                             sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.token=\${SONAR_TOKEN}"
                         }
                     }
@@ -60,12 +59,10 @@ pipeline {
 
         stage('Secure Multi-Stage Docker Build') {
             steps {
-                echo 'Injecting shell runtime environment into Minikube container engine...'
+                echo 'Building container image directly inside Minikube...'
                 script {
-                    sh '''
-                        eval \$(minikube docker-env)
-                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                    '''
+                    // Bypasses local daemon context-swapping constraints safely
+                    sh "minikube image build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
