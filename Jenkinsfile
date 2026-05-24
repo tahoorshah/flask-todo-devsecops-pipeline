@@ -18,6 +18,7 @@ pipeline {
 
         stage('OWASP Dependency-Check Scan') {
             steps {
+                echo 'Running Composition Analysis...'
                 dependencyCheck additionalArguments: '--scan ./ --format ALL', odcInstallation: 'OWASP-DepCheck'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
@@ -25,6 +26,7 @@ pipeline {
 
         stage('SonarQube Code Analysis') {
             steps {
+                echo 'Executing SAST analysis...'
                 script {
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                     withCredentials([string(credentialsId: 'sonar-token1', variable: 'SONAR_TOKEN')]) {
@@ -36,21 +38,18 @@ pipeline {
             }
         }
 
-        stage('Secure Docker Build & Export') {
+        stage('Secure Docker Build') {
             steps {
-                echo 'Building image and exporting to tarball for Minikube...'
-                script {
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                    sh "docker save ${IMAGE_NAME}:${IMAGE_TAG} > image.tar"
-                }
+                echo 'Building image locally...'
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
         stage('Load into Minikube') {
             steps {
-                echo 'Transferring and importing image into Minikube...'
-                // Using the SSH bridge established to bypass user permission constraints
-                sh "ssh -o StrictHostKeyChecking=no tshah@localhost 'minikube image load < /var/lib/jenkins/workspace/flask-todo/image.tar'"
+                echo 'Injecting image into Minikube cluster via SSH bridge...'
+                // This command bypasses user-isolation by running as 'tshah' via SSH
+                sh "ssh -o StrictHostKeyChecking=no tshah@localhost 'minikube image load ${IMAGE_NAME}:${IMAGE_TAG}'"
             }
         }
 
@@ -63,6 +62,7 @@ pipeline {
 
         stage('Secure Deployment') {
             steps {
+                echo 'Deploying to Kubernetes...'
                 withKubeConfig([credentialsId: "${KUBE_CRED_ID}"]) {
                     sh '''
                         kubectl apply -f k8s/namespace.yaml
