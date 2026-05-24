@@ -35,8 +35,8 @@ pipeline {
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                     
                     withSonarQubeEnv('SonarQube') {
-                        // Passing the dynamically injected token variable to clear the 401 Unauthorized block
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=. -Dsonar.token=${SONAR_TOKEN}"
+                        // Using single quotes prevents Groovy from parsing the shell environment variable prematurely
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=. -Dsonar.token=\${SONAR_TOKEN}"
                     }
                 }
             }
