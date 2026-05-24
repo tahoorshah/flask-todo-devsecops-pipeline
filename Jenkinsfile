@@ -6,9 +6,9 @@ pipeline {
         IMAGE_TAG    = 'latest'
         NAMESPACE    = 'production'
         KUBE_CRED_ID = 'kubeconfig-file'
+        // Updated to match your configuration
         SONAR_TOKEN_ID = 'sonar-token1'
-        OSS_INDEX_TOKEN_ID = 'sonatype-oss-token'
-        // Ensure Python can find the 'app' module
+        OSS_INDEX_TOKEN_ID = 'sonatype-oss-token' 
         PYTHONPATH = "${WORKSPACE}"
     }
 
@@ -22,14 +22,10 @@ pipeline {
 
         stage('Run Unit Tests & Coverage') {
             steps {
-                echo 'Setting up environment and running tests...'
                 sh '''
-                    # Create venv and install dependencies
                     python3 -m venv venv
                     ./venv/bin/pip install --upgrade pip
                     ./venv/bin/pip install -r requirements.txt pytest pytest-cov
-                    
-                    # Run tests with coverage
                     ./venv/bin/pytest --cov=app --cov-report=xml
                 '''
             }
@@ -47,7 +43,6 @@ pipeline {
 
         stage('SonarQube Code Analysis') {
             steps {
-                echo 'Executing SAST analysis...'
                 script {
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                     withCredentials([string(credentialsId: "${SONAR_TOKEN_ID}", variable: 'SONAR_TOKEN')]) {
@@ -61,28 +56,24 @@ pipeline {
 
         stage('Secure Docker Build') {
             steps {
-                echo 'Building image...'
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
         stage('Trivy Image Vulnerability Scan') {
             steps {
-                echo 'Scanning container image (Strict Gate)...'
                 sh "trivy image --severity CRITICAL --exit-code 1 ${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
 
         stage('Load into Minikube') {
             steps {
-                echo 'Injecting image into Minikube cluster...'
                 sh "ssh -o StrictHostKeyChecking=no tshah@localhost 'MINIKUBE_HOME=/home/tshah/.minikube minikube image load ${IMAGE_NAME}:${IMAGE_TAG}'"
             }
         }
 
         stage('Secure Deployment') {
             steps {
-                echo 'Deploying to Kubernetes...'
                 withKubeConfig([credentialsId: "${KUBE_CRED_ID}"]) {
                     sh '''
                         kubectl apply -f k8s/namespace.yaml
