@@ -7,7 +7,7 @@ pipeline {
         IMAGE_TAG    = 'latest'
         NAMESPACE    = 'production'
         
-        // This must match your new Jenkins Credential ID exactly
+        // Configured Jenkins Credential IDs
         SONAR_CRED_ID  = 'sonar-token1'
         KUBE_CRED_ID   = 'kubeconfig-file'
     }
@@ -34,10 +34,10 @@ pipeline {
                 script {
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                     
-                    // Pulling the fresh token from your updated credential ID
                     withCredentials([string(credentialsId: "${SONAR_CRED_ID}", variable: 'SONAR_TOKEN')]) {
                         withSonarQubeEnv('SonarQube') {
-                            sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=. -Dsonar.token=\\${SONAR_TOKEN}"
+                            // Clean command: reads host from system configuration and indexing from sonar-project.properties
+                            sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.token=\${SONAR_TOKEN}"
                         }
                     }
                 }
