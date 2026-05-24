@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // Architecture definitions
+        // Tagging image for the internal Minikube registry
         IMAGE_NAME   = 'localhost:5000/flask-todo'
         IMAGE_TAG    = 'latest'
         NAMESPACE    = 'production'
@@ -33,7 +33,6 @@ pipeline {
                 echo 'Executing static application security testing (SAST)...'
                 script {
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
-                    
                     withCredentials([string(credentialsId: "${SONAR_CRED_ID}", variable: 'SONAR_TOKEN')]) {
                         withSonarQubeEnv('SonarQube') {
                             sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.token=\${SONAR_TOKEN}"
@@ -45,13 +44,10 @@ pipeline {
 
         stage('SonarQube Quality Gate Validation') {
             steps {
-                echo 'Enforcing security quality boundaries...'
                 timeout(time: 5, unit: 'MINUTES') {
                     script {
                         def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            error "Pipeline aborted: Code failed SonarQube Quality Gate metrics! Status: ${qg.status}"
-                        }
+                        if (qg.status != 'OK') error "SonarQube Quality Gate failed: ${qg.status}"
                     }
                 }
             }
@@ -59,28 +55,24 @@ pipeline {
 
         stage('Secure Multi-Stage Docker Build') {
             steps {
-                echo 'Building container image using host Docker daemon...'
+                echo 'Building and pushing image to local Minikube registry...'
                 script {
-                    // Build locally using host daemon first
+                    // Build image and push to the registry-addon service
                     sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                    
-                    echo 'Loading image into Minikube cluster space...'
-                    // Force cache injection into minikube cluster environment
-                    sh "minikube image load ${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
         }
 
         stage('Trivy Image Vulnerability Scan') {
             steps {
-                echo 'Scanning container image filesystem for severe vulnerabilities...'
+                echo 'Scanning image...'
                 sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
 
         stage('Secure Deployment to Kubernetes') {
             steps {
-                echo "Deploying application workloads into Kubernetes namespace: ${NAMESPACE}"
                 withKubeConfig([credentialsId: "${KUBE_CRED_ID}"]) {
                     sh '''
                         kubectl apply -f k8s/namespace.yaml
@@ -92,26 +84,10 @@ pipeline {
 
         stage('Verification & Health Audit') {
             steps {
-                echo 'Auditing final lifecycle state of deployment rollout...'
                 withKubeConfig([credentialsId: "${KUBE_CRED_ID}"]) {
-                    sh """
-                        kubectl rollout status deployment/flask-todo -n ${NAMESPACE} --timeout=90s
-                        kubectl get pods -n ${NAMESPACE}
-                    """
+                    sh "kubectl rollout status deployment/flask-todo -n ${NAMESPACE} --timeout=90s"
                 }
             }
-        }
-    }
-
-    post {
-        always {
-            echo 'Pipeline execution cycle complete.'
-        }
-        success {
-            echo 'Application securely validated, scanned, and successfully running in production!'
-        }
-        failure {
-            echo 'Security vulnerability or build error detected. Review stage execution logs above.'
         }
     }
 }
