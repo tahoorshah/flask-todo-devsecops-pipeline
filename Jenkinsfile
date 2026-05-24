@@ -32,11 +32,11 @@ pipeline {
             steps {
                 echo 'Executing static application security testing (SAST)...'
                 script {
-                    // Directly resolve the binary path without relying on declarative tools mapping
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                     
                     withSonarQubeEnv('SonarQube') {
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=."
+                        // Passing the dynamically injected token variable to clear the 401 Unauthorized block
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=. -Dsonar.token=${SONAR_TOKEN}"
                     }
                 }
             }
