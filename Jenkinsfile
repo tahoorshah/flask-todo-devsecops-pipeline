@@ -30,8 +30,7 @@ pipeline {
 
         stage('SonarQube Code Analysis') {
             tools {
-                // Dynamically injects the path of the scanner into the pipeline environment
-                sonarScanner 'SonarQubeScanner'
+                sonarRunner 'SonarQubeScanner'
             }
             steps {
                 echo 'Executing static application security testing (SAST)...'
