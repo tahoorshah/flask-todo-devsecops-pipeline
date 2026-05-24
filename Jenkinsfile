@@ -59,10 +59,14 @@ pipeline {
 
         stage('Secure Multi-Stage Docker Build') {
             steps {
-                echo 'Building container image directly inside Minikube...'
+                echo 'Building container image using host Docker daemon...'
                 script {
-                    // Bypasses local daemon context-swapping constraints safely
-                    sh "minikube image build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                    // Build locally using host daemon first
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                    
+                    echo 'Loading image into Minikube cluster space...'
+                    // Force cache injection into minikube cluster environment
+                    sh "minikube image load ${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
         }
