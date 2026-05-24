@@ -8,6 +8,8 @@ pipeline {
         KUBE_CRED_ID = 'kubeconfig-file'
         SONAR_TOKEN_ID = 'sonar-token1'
         OSS_INDEX_TOKEN_ID = 'sonatype-oss-token'
+        // Ensure Python can find the 'app' module
+        PYTHONPATH = "${WORKSPACE}"
     }
 
     stages {
@@ -20,14 +22,14 @@ pipeline {
 
         stage('Run Unit Tests & Coverage') {
             steps {
-                echo 'Self-healing environment and generating coverage...'
+                echo 'Setting up environment and running tests...'
                 sh '''
-                    # Ensure venv is created in the current workspace
+                    # Create venv and install dependencies
                     python3 -m venv venv
                     ./venv/bin/pip install --upgrade pip
                     ./venv/bin/pip install -r requirements.txt pytest pytest-cov
                     
-                    # Run tests relative to workspace
+                    # Run tests with coverage
                     ./venv/bin/pytest --cov=app --cov-report=xml
                 '''
             }
