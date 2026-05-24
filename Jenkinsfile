@@ -29,13 +29,15 @@ pipeline {
         }
 
         stage('SonarQube Code Analysis') {
-            tools {
-                sonarRunner 'SonarQubeScanner'
-            }
             steps {
                 echo 'Executing static application security testing (SAST)...'
-                withSonarQubeEnv('SonarQube') {
-                    sh 'sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=.'
+                script {
+                    // Directly resolve the binary path without relying on declarative tools mapping
+                    def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+                    
+                    withSonarQubeEnv('SonarQube') {
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=flask-todo -Dsonar.sources=."
+                    }
                 }
             }
         }
